@@ -1,0 +1,4 @@
+[core]
+    remote = localremote
+['remote "localremote"']
+    url = D:/MTech IITM/Trimester 3/Industrial Lab/dvc_storage
