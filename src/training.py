@@ -12,10 +12,25 @@ from pyspark.ml.tuning import ParamGridBuilder,CrossValidator
 from pyspark.ml import Pipeline
 from datetime import datetime
 from .deployment import deploy_best_model
-
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import confusion_matrix
+import pandas as pd 
 import mlflow
 import mlflow.spark
-import mlflow
+import json
+
+import os
+
+# Base artifacts folder
+artifact_base = "Artifacts"
+cm_folder = os.path.join(artifact_base, "Confusion_Matrix")
+report_folder = os.path.join(artifact_base, "Evaluation_Report")
+
+# Create folders if they don't exist
+os.makedirs(cm_folder, exist_ok=True)
+os.makedirs(report_folder, exist_ok=True)
+
 mlflow.set_tracking_uri("http://localhost:5000")
 from .spark_session import spark_session_creator
 
@@ -98,7 +113,7 @@ for pipeline, grid in pipelines:
     time=datetime.now().strftime("%d%m%Y%H%M%S")
     with mlflow.start_run(run_name=f"Experiment_{time}"):
 
-        model = cv.fit(train_df)   # train
+        model = cv.fit(train_df)
         preds = model.transform(test_df)
 
         f1_s = f1_score.evaluate(preds)
@@ -108,11 +123,34 @@ for pipeline, grid in pipelines:
         best_cv_model=model.bestModel
         bestParams = {p.name: best_cv_model.stages[-1].getOrDefault(p) 
                         for p in best_cv_model.stages[-1].extractParamMap()}
-        mlflow.log_param("model", "RandomForestClassifier")
         mlflow.log_params(bestParams)
         mlflow.log_metric("Accuracy", acc_s)
         mlflow.log_metric("F1 Score", f1_s)
         mlflow.log_metric("AUC", auc_s)
+
+        model_name=pipeline.getStages()[-1].__class__.__name__
+
+        preds_pd = preds.select("label", "prediction").toPandas()
+        cm = confusion_matrix(preds_pd["label"], preds_pd["prediction"])
+
+        plt.figure(figsize=(6, 4))
+        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+        plt.xlabel("Predicted")
+        plt.ylabel("Actual")
+        plt.title("Confusion Matrix")
+        cm_file = os.path.join(cm_folder,f"confusion_matrix_{model_name}.png")
+        plt.savefig(cm_file)
+        plt.close()
+        mlflow.log_artifact(cm_file)
+        report = {
+            "accuracy": acc_s,
+            "f1": f1_s,
+            "auc": auc_s
+        }
+        report_file = os.path.join(report_folder, f"evaluation_report_{model_name}.json")
+        with open(report_file, "w") as f:
+            json.dump(report, f)
+        mlflow.log_artifact(report_file)
 
         print(f"{pipeline.getStages()[-1].__class__.__name__} Accuracy= {acc_s:.4f}, AUC={auc_s:.4f}, F1 Score = {f1_s:.4f} ")
         
@@ -124,18 +162,31 @@ for pipeline, grid in pipelines:
 
 best_pipeline_model = best_model.bestModel
 final_model = best_pipeline_model.stages[-1]
+preds = best_pipeline_model.transform(test_df)
 
-mlflow.log_metric("accuracy", best_acc)
-mlflow.log_metric("auc", best_auc)
-mlflow.log_metric("f1", best_f1)
+model_name=best_pipeline_model.getStages()[-1].__class__.__name__
 
-import json
+preds_pd = preds.select("label", "prediction").toPandas()
+cm = confusion_matrix(preds_pd["label"], preds_pd["prediction"])
 
+plt.figure(figsize=(6, 4))
+sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+plt.xlabel("Predicted")
+plt.ylabel("Actual")
+plt.title("Confusion Matrix")
+cm_file = os.path.join(cm_folder,f"confusion_matrix_{model_name}.png")
+plt.savefig(cm_file)
+plt.close()
+mlflow.log_artifact(cm_file)
 report = {
-    "accuracy":best_acc,
-    "f1": best_f1,
-    "auc": best_auc
+    "accuracy": acc_s,
+    "f1": f1_s,
+    "auc": auc_s
 }
+report_file = os.path.join(report_folder, f"evaluation_report_{model_name}.json")
+with open(report_file, "w") as f:
+    json.dump(report, f)
+mlflow.log_artifact(report_file)
 
 params = {}
 for p in final_model.params:
