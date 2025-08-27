@@ -6,16 +6,6 @@ from pyspark.sql.functions import count,sum,col,when,mean
 from pyspark.ml.feature import Imputer, StringIndexer,OneHotEncoder,VectorAssembler
 from .utils import ColumnDropper,MasterColumnCreator,GenderFiller,AgeImputer
 
-# spark = spark_session_creator()
-
-# train_df=spark.read.csv(r"/root/AILabProject/data/train.csv",header=True,inferSchema=True)
-# test_df=spark.read.csv(r"/root/AILabProject/data/test.csv",header=True,inferSchema=True)
-# label=spark.read.csv(r"/root/AILabProject/data/gender_submission.csv",header=True,inferSchema=True)
-
-# test_df = test_df.join(label, on="PassengerID")
-# train_df=train_df.withColumnRenamed('Survived','label')
-# test_df=test_df.withColumnRenamed('Survived','label')
-
 def preprocessing_pipeline():
 
     master_column_creator=MasterColumnCreator()
