@@ -52,19 +52,10 @@ class PredictionRequest(BaseModel):
 
 @app.post("/predict")
 def predict(request: PredictionRequest):
-    print('code entered the predict statement')
     input_data = [request.dict()]
     input_df = spark.createDataFrame(input_data, schema=schema)
-    input_df.show()
     preds = model.transform(input_df)
-    print('transformation is done')
-    print(type(preds))
-    print(dir(preds))
-    print(preds.columns)
-    preds.describe().show()
-    preds.show()
     result_df = preds.select("prediction", "probability").toPandas()
     result_df['probability'] = result_df['probability'].apply(lambda vec: vec.tolist())
     predictions = result_df.to_dict('records')
-    print(predictions)
     return {"predictions": predictions}
